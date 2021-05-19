@@ -96,7 +96,7 @@ def load_one(lit: LineIterator) -> dict:
     # ----------------
     # add labels to extra dictionary if they are loaded
     extra_labels = ['nuclear_repulsion_energy', 'polarizability_tensor', 'imaginary_freq',
-                    'vib_energy', 'eda2', 'frags']
+                    'vib_energy', 'solvent_method', 'eda2', 'frags']
 
     extra = {label: data[label] for label in extra_labels if data.get(label) is not None}
     # if present, convert vibrational energy from kcal/mol to "atomic units + K"
@@ -204,7 +204,7 @@ def _helper_rem_job(lit: LineIterator) -> Tuple:
     """Load job specifications from Q-Chem output file format."""
     data_rem = {}
     for line in lit:
-        if line.strip() == '$end':
+        if line.strip() == '$end' or line.strip() == '$END':
             break
         line = line.strip()
         # parse job type section; some sections might not be available
@@ -218,6 +218,8 @@ def _helper_rem_job(lit: LineIterator) -> Tuple:
             data_rem['obasis_name'] = line.split()[1].lower()
         elif line.lower().startswith('symmetry'):
             data_rem['symm'] = bool(strtobool(line.split()[1]))
+        elif line.lower().startswith('solvent_method'):
+            data_rem['solvent_method'] = line.split()[1].lower()
     return data_rem
 
 
@@ -438,10 +440,10 @@ def _helper_eda2(lit: LineIterator) -> dict:  # pylint: disable=too-many-branche
                 if line_2.strip().startswith('-----'):
                     break
                 info = line_2.split()
-                if info[0] in ['E_cls_elec', 'E_cls_pauli']:
-                    eda2[info[0].lower()] = float(info[5])
-                elif info[0].split("[")[1] == 'E_mod_pauli':
+                if len(info[0].split("[")) == 2 and info[0].split("[")[1] == 'E_mod_pauli':
                     eda2[info[0].split("[")[1].lower()] = float(info[5])
+                elif info[0] in ['E_cls_elec', 'E_cls_pauli', 'E_cls_disp', 'E_mod_pauli']:
+                    eda2[info[0].lower()] = float(info[5])
 
         elif line.strip().startswith('Simplified EDA Summary'):
             next(lit)
@@ -449,7 +451,8 @@ def _helper_eda2(lit: LineIterator) -> dict:  # pylint: disable=too-many-branche
                 if line_2.strip().startswith('-----'):
                     break
                 info = line_2.split()
-                if info[0] in ['PREPARATION', 'FROZEN', 'DISPERSION', 'POLARIZATION', 'TOTAL']:
+                if info[0] in ['PREPARATION', 'SOLVATION', 'FROZEN', 'DISPERSION',
+                               'POLARIZATION', 'TOTAL']:
                     eda2[info[0].lower()] = float(info[1])
                 elif info[0].split("[")[-1] == 'PAULI':
                     eda2[info[0].split("[")[-1].lower()] = float(info[1].split("]")[0])
